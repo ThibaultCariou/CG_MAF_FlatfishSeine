@@ -3,6 +3,8 @@
 load("Data/TabFin_estuseine95-19.RData")
 load("Data/cotesseine.RData")
 load("Data/polygone.RData")
+coast <- rgdal::readOGR("Data/Coast_estuary_detailled.gpkg")
+coast <- raster::crop(coast, raster::extent(-0.3,0.3,49.25,49.7))
 
 #Libraries
 library(RGeostats)
@@ -45,6 +47,7 @@ Taille_sp.year <- Taille_sp %>% group_by(Nv_Rubbin, Groupe,annee) %>% summarise(
 ggplot(Taille_sp)+
   geom_boxplot(aes(x= Nv_Rubbin, y=Taille, fill=Groupe  ))
 #According to this, we redifine the group variable according to size 
+Pichon$Groupe <- as.character(Pichon$Groupe)
 Pichon$Groupe[Pichon$Nv_Rubbin=="LIMALIM" & Pichon$Taille<=10] <- "G0"
 Pichon$Groupe[Pichon$Nv_Rubbin=="LIMALIM" & Pichon$Taille>10 & Pichon$Taille<=22] <- "G1"
 Pichon$Groupe[Pichon$Nv_Rubbin=="LIMALIM" & Pichon$Taille>22] <- "G2p"
@@ -60,7 +63,7 @@ Pichon$Groupe[Pichon$Nv_Rubbin=="PLEUPLA" & Pichon$Taille>27] <- "G2p"
 Pichon$Groupe[Pichon$Nv_Rubbin=="SOLEVUL" & Pichon$Taille<=14] <- "G0"
 Pichon$Groupe[Pichon$Nv_Rubbin=="SOLEVUL" & Pichon$Taille>14 & Pichon$Taille<=22] <- "G1"
 Pichon$Groupe[Pichon$Nv_Rubbin=="SOLEVUL" & Pichon$Taille>22] <- "G2p"
-
+Pichon$Groupe <- factor(Pichon$Groupe)
 
 #Calcul of density for species age group
 Pichon <- Pichon %>% na.omit()
@@ -159,10 +162,12 @@ mean_distri <- ggplot()+
   theme_bw() + scale_color_viridis()  + 
   ggtitle("") + xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
   facet_wrap(~Common)+
-  geom_path(data = cotes, aes(x = long, y = lat, group = group)) + coord_fixed()
+  geom_polygon(data = coast, aes(x = long, y = lat, group = group),fill="grey",col="black") + coord_fixed() +
+  labs(size = "Mean density\n(ind. per hectare)",col = "Mean density\n(ind. per hectare)")
 mean_distri
 
 #ggsave("Figure_1.pdf",path="Results/Figures")
+#ggsave("Figure_1.tiff",path="Results/Figures")
 #####
 
 
@@ -175,6 +180,7 @@ data.CG <- data.CG %>% distinct() %>% tidyr::spread(cat, Densite) %>%  dplyr::se
 
 #Group by year
 data.CG <- distinct(data.CG) #unique rows
+data.CG <- as.data.frame(data.CG)
 data.CG[which(is.na(data.CG),arr.ind = T)] <- 0
 data.CG <- data.CG %>% group_by(loncor,latcor,annee) %>% summarise_all(sum)
 
@@ -302,16 +308,19 @@ Mean_iso <- Mean_iso[Mean_iso$Common!="Flounder",]
 names(Mean_iso)[1] <- "Species"
 names(CG_dfG0)[17] <- "Sci.red"
 names(CG_dfG0)[18] <- "Species"
+coastCG <- raster::crop(coast, raster::extent(-0.15,0.3,49.2,49.60))
 
+#↑1st version, with mean isotropy
 Grav <- ggplot(data=CG_dfG0,aes(x=Lon, y=Lat)) + 
   geom_point(aes(col=Species),alpha=0.7, pch=19, size=2) +
   geom_segment(data=Mean_iso[Mean_iso$Classe=="G0",],aes(x=x,xend=xend,y=y, yend=yend, col=Species), lwd=1.3)+ 
-  geom_path(data=cotes,aes(x=long, y=lat, group=group)) + theme_bw() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") + ggtitle("") +
+  geom_path(data=cotes,aes(x=long, y=lat, group=group)) +
+  coord_fixed()  + theme_bw() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") + ggtitle("") +
   xlim(-0.15,0.3) + ylim(49.32,49.60) +
   stat_ellipse(aes(color=Species)) +
   scale_colour_viridis_d() + guides(col=F)
 
-
+#1st version
 Iso <- ggplot(data=CG_dfG0) +
   #geom_violin(aes(x=Species, y=Iso, fill=Species),alpha=0.7) + 
   geom_boxplot(aes(x=Species, y=Iso),width=0.1)+ 
@@ -323,8 +332,9 @@ plo2 <- ggplot(data=CG_dfG0)+
   facet_wrap(.~Species,nrow=1)+ geom_boxplot(aes(y=Iso,x=2008),width=2)+
   scale_fill_viridis_d() + scale_color_viridis_d() +theme_bw() + ylab("Isotropy") +xlab("Year")+
   theme(axis.text.x = element_text(size=10, angle=45,hjust = 1))+
-  scale_x_continuous(breaks=seq(1996,2020,4))
+  scale_x_continuous(breaks=seq(1996,2020,4))+ labs(size="Inertia")
 
+#Plot of all inertia axis
 Inertia <- ggplot(data=CG_dfG0) + 
   geom_segment(aes(x=x1,xend=x2,y=y1, yend=y2, col=Species), lwd=1.3)+ 
   geom_segment(aes(x=x3,xend=x4,y=y3, yend=y4, col=Species), lwd=1.3)+ 
@@ -335,7 +345,7 @@ Inertia <- ggplot(data=CG_dfG0) +
 #cowplot::plot_grid(Grav,Iso, nrow=1)
 
 
-#Inertia
+#Violin boxplot of inertia
 Iner <- ggplot(data=CG_dfG0) +
   geom_violin(aes(x=Species, y=Iner, fill=Species),alpha=0.7) + 
   geom_boxplot(aes(x=Species, y=Iner),width=0.1)+ 
@@ -355,7 +365,8 @@ plo1 <-ggplot(data=CG_dfG0) +
   #geom_segment(aes(x=x1,xend=x2,y=y1, yend=y2, col=Species), lwd=1.3)+ 
   #geom_segment(aes(x=x3,xend=x4,y=y3, yend=y4, col=Species), lwd=1.3)+ 
   geom_ellipse(data=radius,aes(x0=Lon,y0=Lat,a=a/6,b=b/6,angle=angle,col=Species,fill=Species))+
-  geom_path(data=cotes,aes(x=long, y=lat, group=group)) + theme_bw() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") + ggtitle("") +
+  geom_polygon(data = coastCG, aes(x = long, y = lat, group = group),fill="grey",col="black")+
+  theme_bw() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") + ggtitle("") +
   xlim(-0.15,0.3) + ylim(49.25,49.6) +
   scale_colour_viridis_d() + guides(col=F,fill=F) +scale_fill_viridis_d(alpha=0.3)+coord_fixed()
 
@@ -363,6 +374,7 @@ plo1 <-ggplot(data=CG_dfG0) +
 cowplot::plot_grid(plo1,plo2, nrow=1)
 
 #ggsave("Figure_2.pdf",path="Results/Figures")
+#ggsave("Figure_2.tiff",path="Results/Figures")
 #####
 
 #Global index of collocation and local index of collocation#####
@@ -374,6 +386,7 @@ dat.IC$var <- paste(dat.IC$Nv_Rubbin,dat.IC$Groupe,dat.IC$annee, sep="_")
 #Deleting useless variable and sreading variables
 dat.IC <- dat.IC %>% dplyr::select(-Numéro_du_Trait, -Code_Station, -lonmoy, -latmoy, -Nv_Rubbin, -annee, -Groupe)
 dat.IC <- spread(dat.IC,var, Densite)
+dat.IC <- as.data.frame(dat.IC)
 dat.IC[which(is.na(dat.IC),arr.ind = T)] <- 0
 
 
@@ -549,9 +562,9 @@ index.dab <- matrix(NA,nrow=dim(GIC.dab.G0)[1],ncol=dim(GIC.dab.G0)[2],
 index.dab[lower.tri(index.dab)] <- GIC.dab.G0[lower.tri(GIC.dab.G0)]
 index.dab[upper.tri(index.dab)] <- LIC.dab.G0[upper.tri(LIC.dab.G0)]
 
-
+#Combining GIC/LIC index in matrix plot
 cordab <- ggcorrplot(index.dab,
-           method="circle",
+           method="square",
            outline.col = "white",
            ggtheme = ggplot2::theme_gray,
            colors = c("#6D9EC1", "white", "#E46726"),
@@ -563,7 +576,8 @@ cordab <- ggcorrplot(index.dab,
                      labels=colnames(GIC.dab.G0))+
   scale_y_discrete(breaks=letters[1:13],
                    labels=colnames(GIC.dab.G0))+theme_bw()+
-  xlab("GIC")+ylab("LIC")+ggtitle("Dab")
+  xlab("GIC")+ylab("LIC")+ggtitle("Dab") + labs(fill="Index value")+
+  theme(axis.text.x = element_text(angle = 90)) + guides(fill=F)
 
   
 
@@ -575,7 +589,7 @@ index.plaice[upper.tri(index.plaice)] <- LIC.plaice.G0[upper.tri(LIC.plaice.G0)]
 
 
 corplaice <- ggcorrplot(index.plaice,
-                     method = "circle",
+                     method = "square",
                      outline.col = "white",
                      ggtheme = ggplot2::theme_gray,
                      colors = c("#6D9EC1", "white", "#E46726"),
@@ -587,7 +601,8 @@ corplaice <- ggcorrplot(index.plaice,
                    labels=colnames(GIC.sole.G0))+
   scale_y_discrete(breaks=letters[1:13],
                    labels=colnames(GIC.sole.G0))+theme_bw()+
-  xlab("GIC")+ylab("LIC")+ggtitle("Plaice")
+  xlab("GIC")+ylab("LIC")+ggtitle("Plaice")+ labs(fill="Index value")+
+  theme(axis.text.x = element_text(angle = 90))+ guides(fill=F)
 
 #Sole
 index.sole <- matrix(NA,nrow=dim(GIC.sole.G0)[1],ncol=dim(GIC.sole.G0)[2],
@@ -597,7 +612,7 @@ index.sole[upper.tri(index.sole)] <- LIC.sole.G0[upper.tri(LIC.sole.G0)]
 
 
 corsole <- ggcorrplot(index.sole,
-                      method="circle",
+                      method="square",
                       outline.col = "white",
                       ggtheme = ggplot2::theme_gray,
                       colors = c("#6D9EC1", "white", "#E46726"),
@@ -609,11 +624,25 @@ corsole <- ggcorrplot(index.sole,
                    labels=colnames(GIC.sole.G0))+
   scale_y_discrete(breaks=letters[1:13],
                    labels=colnames(GIC.sole.G0))+theme_bw()+
-  xlab("GIC")+ylab("LIC")+ggtitle("Sole")
+  xlab("GIC")+ylab("LIC")+ggtitle("Sole")+ labs(fill="Index value")+
+  theme(axis.text.x = element_text(angle = 90)) 
 
 
+#Plot annexe 1
+cor_row <- cowplot::plot_grid(cordab,corplaice,corsole+ theme(legend.position="none"),nrow=1,ncol=3)
+#Retrieve legend
+legend <- cowplot::get_legend(
+  # create some space to the left of the legend
+  corsole + theme(legend.box.margin = margin(0, 0, 0, 12))
+)
 
-cowplot::plot_grid(cordab,corplaice,corsole,nrow=1,ncol=3)
+# add the legend to the row we made earlier. Give it one-third of 
+# the width of one plot (via rel_widths).
+cowplot::plot_grid(cor_row,legend,rel_widths = c(3, .4))
+
+#ggsave("Annexe_2.pdf",path="Results/Figures")
+#ggsave("Annexe_2.tiff",path="Results/Figures")
+
 
 
 
@@ -643,7 +672,7 @@ ggplot(booxingplot, aes(x=Index,y=Value))+
   geom_boxplot(aes(Group=Species),width=.1, position=dodge)+
   scale_fill_viridis_d() + theme_minimal()
 
-
+#Violin boxplot isotropy.
 Iso <- ggplot(data=CG_dfG0) +
   geom_violin(aes(x=Species, y=Iso, fill=Species),alpha=0.7) + 
   geom_boxplot(aes(x=Species, y=Iso),width=0.1)+ 
@@ -834,13 +863,14 @@ networks <-cowplot::plot_grid(graph_dab_G0,graph_plaice_G0,graph_sole_G0,nrow=3)
 networks
 
 #ggsave("Figure_3.pdf",path="Results/Figures", height = 28, width=20, units = "cm")
+#ggsave("Figure_3.tiff",path="Results/Figures", height = 28, width=20, units = "cm")
 
 #Alluvial
 dab.com <- net_dab_G0$data[,c(3,4)]
 plaice.com <- net_plaice_G0$data[,c(3,4)]
 sole.com <- net_sole_G0$data[,c(3,4)]
 
-tmp <- left_join(dab.com,plaice.com, by="name")
+tmp <- dplyr::left_join(dab.com,plaice.com, by="name")
 
 com <- left_join(tmp,sole.com, by="name")
 
@@ -875,10 +905,11 @@ period <- character()
 sp <- unique(Pichon_dens_corres$Nv_Rubbin)
 gp <- unique(Pichon_dens_corres$Groupe)
 
-#Data formating, spread species x group variable 
+#Data formatting, spread species x group variable 
 data.maf <- Pichon_dens_corres
 data.maf$cat <- paste(data.maf$Nv_Rubbin,data.maf$Groupe,data.maf$annee, sep="_")
 data.maf <- data.maf %>% distinct() %>% tidyr::spread(cat, Densite) %>%  dplyr::select(-Numéro_du_Trait, -Code_Station, -lonmoy, -latmoy, -Groupe, -Nv_Rubbin, -Correspondance, -annee) 
+data.maf <- as.data.frame(data.maf)
 data.maf[which(is.na(data.maf),arr.ind = T)] <- 0
 data.maf <- data.maf %>% group_by(loncor, latcor) %>% summarise_each(funs(sum))
 
@@ -928,7 +959,7 @@ maf.df.plaice <- maf.df %>% filter(Taxa %in% c("PLEUPLA") & Group %in% c("G0") )
 maf.df.sole <- maf.df %>% filter(Taxa %in% c("SOLEVUL") & Group %in% c("G0") )
 maf.df.flounder <- maf.df %>% filter(Taxa %in% c("PLATFLE") & Group %in% c("G0") )
 
-
+coastMAF <- raster::crop(coast, raster::extent(-0.2,0.25,49.25,49.7))
 ### G0
 toto <- maf.df.dab %>% filter(MAF %in% c("MAF1","MAF2","MAF3"))
 toto$Color <- ifelse(toto$Value>0,1,2)
@@ -936,8 +967,8 @@ dab.maf <-ggplot(toto)+
   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
   theme_bw()+ 
   xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
-  geom_path(data = cotes, aes(x = long, y = lat, group = group)) +
-  facet_wrap(.~MAF) +ggtitle("Dab") + guides(col=F) + coord_fixed() +
+  geom_polygon(data = coastMAF, aes(x = long, y = lat, group = group),fill="grey",col="black")+
+  facet_wrap(.~MAF) +ggtitle("Dab") + guides(col=F) + coord_fixed() + labs(size="absolute\nMAF value") +
   scale_color_viridis(option="D")
 
 
@@ -947,8 +978,8 @@ plaice.maf <- ggplot(toto)+
   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
   theme_bw() + 
   xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
-  geom_path(data = cotes, aes(x = long, y = lat, group = group)) +
-  facet_wrap(.~MAF) +ggtitle("Plaice") + guides(col=F)+ coord_fixed()+
+  geom_polygon(data = coastMAF, aes(x = long, y = lat, group = group),fill="grey",col="black")+
+  facet_wrap(.~MAF) +ggtitle("Plaice") + guides(col=F)+ coord_fixed() + labs(size="absolute\nMAF value") +
   scale_color_viridis(option="D")
 
 toto <- maf.df.sole %>% filter(MAF %in% c("MAF1","MAF2","MAF3"))
@@ -957,22 +988,26 @@ sole.maf <-ggplot(toto)+
   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
   theme_bw() + 
   xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
-  geom_path(data = cotes, aes(x = long, y = lat, group = group)) +
-  facet_wrap(.~MAF) +ggtitle("Sole") + guides(col=F)+ coord_fixed()+
+  geom_polygon(data = coastMAF, aes(x = long, y = lat, group = group),fill="grey",col="black")+
+  facet_wrap(.~MAF) +ggtitle("Sole") + guides(col=F)+ coord_fixed() + labs(size="absolute\nMAF value") +
   scale_color_viridis(option="D")
 
-toto <- maf.df.flounder %>% filter(MAF %in% c("MAF1","MAF2","MAF3"))
-toto$Color <- ifelse(toto$Value>0,1,2)
-flounder.maf <- ggplot(toto)+
-  geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
-  theme_bw() + 
-  xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
-  geom_path(data = cotes, aes(x = long, y = lat, group = group)) +
-  facet_wrap(.~MAF) +ggtitle("Flounder") + guides(col=F)+ coord_fixed()+
-  scale_color_viridis(option="D")
+# toto <- maf.df.flounder %>% filter(MAF %in% c("MAF1","MAF2","MAF3"))
+# toto$Color <- ifelse(toto$Value>0,1,2)
+# flounder.maf <- ggplot(toto)+
+#   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
+#   theme_bw() + 
+#   xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
+#   geom_path(data = cotes, aes(x = long, y = lat, group = group)) +
+#   facet_wrap(.~MAF) +ggtitle("Flounder") + guides(col=F)+ coord_fixed()+
+#   scale_color_viridis(option="D")
 
 cowplot::plot_grid(dab.maf,plaice.maf, sole.maf,
                    nrow=3)
+
+#ggsave("Annexe_3.pdf",path="Results/Figures")
+#ggsave("Annexe_3.tiff",path="Results/Figures")
+
 #####
 
 #MAF variogram#####
@@ -1047,10 +1082,122 @@ maf_vario <- ggplot(vario.df)+
 
 maf_vario
 #ggsave("Figure_4.pdf", path="Results/Figures")
+#ggsave("Figure_4.tiff", path="Results/Figures")
 #####
 
 #MAF clustering#####
-library(ggdendro)
+#https://atrebas.github.io/post/2019-06-08-lightweight-dendrograms/
+dendro_data_k <- function(hc, k) {
+  
+  hcdata    <-  ggdendro::dendro_data(hc, type = "rectangle")
+  seg       <-  hcdata$segments
+  labclust  <-  cutree(hc, k)[hc$order]
+  segclust  <-  rep(0L, nrow(seg))
+  heights   <-  sort(hc$height, decreasing = TRUE)
+  height    <-  mean(c(heights[k], heights[k - 1L]), na.rm = TRUE)
+  
+  for (i in 1:k) {
+    xi      <-  hcdata$labels$x[labclust == i]
+    idx1    <-  seg$x    >= min(xi) & seg$x    <= max(xi)
+    idx2    <-  seg$xend >= min(xi) & seg$xend <= max(xi)
+    idx3    <-  seg$yend < height
+    idx     <-  idx1 & idx2 & idx3
+    segclust[idx] <- i
+  }
+  
+  idx                    <-  which(segclust == 0L)
+  segclust[idx]          <-  segclust[idx + 1L]
+  hcdata$segments$clust  <-  segclust
+  hcdata$segments$line   <-  as.integer(segclust < 1L)
+  hcdata$labels$clust    <-  labclust
+  
+  hcdata
+}
+set_labels_params <- function(nbLabels,direction = c("tb", "bt", "lr", "rl"),fan       = FALSE) {
+  if (fan) {
+    angle       <-  360 / nbLabels * 1:nbLabels + 90
+    idx         <-  angle >= 90 & angle <= 270
+    angle[idx]  <-  angle[idx] + 180
+    hjust       <-  rep(0, nbLabels)
+    hjust[idx]  <-  1
+  } else {
+    angle       <-  rep(0, nbLabels)
+    hjust       <-  0
+    if (direction %in% c("tb", "bt")) { angle <- angle + 45 }
+    if (direction %in% c("tb", "rl")) { hjust <- 1 }
+  }
+  list(angle = angle, hjust = hjust, vjust = 0.5)
+}
+plot_ggdendro <- function(hcdata,direction   = c("lr", "rl", "tb", "bt"),
+                          fan = FALSE,scale.color = NULL,branch.size = 1,label.size  = 3,nudge.label = 0.01,expand.y    = 0.1) {
+  
+  direction <- match.arg(direction) # if fan = FALSE
+  ybreaks   <- pretty(segment(hcdata)$y, n = 5)
+  ymax      <- max(segment(hcdata)$y)
+  
+  ## branches
+  p <- ggplot() +
+    geom_segment(data         =  segment(hcdata),
+                 aes(x        =  x,
+                     y        =  y,
+                     xend     =  xend,
+                     yend     =  yend,
+                     linetype =  factor(line),
+                     colour   =  factor(clust)),
+                 lineend      =  "round",
+                 show.legend  =  FALSE,
+                 size         =  branch.size)
+  
+  ## orientation
+  if (fan) {
+    p <- p +
+      coord_polar(direction = -1) +
+      scale_x_continuous(breaks = NULL,
+                         limits = c(0, nrow(label(hcdata)))) +
+      scale_y_reverse(breaks = ybreaks)
+  } else {
+    p <- p + scale_x_continuous(breaks = NULL)
+    if (direction %in% c("rl", "lr")) {
+      p <- p + coord_flip()
+    }
+    if (direction %in% c("bt", "lr")) {
+      p <- p + scale_y_reverse(breaks = ybreaks)
+    } else {
+      p <- p + scale_y_continuous(breaks = ybreaks)
+      nudge.label <- -(nudge.label)
+    }
+  }
+  
+  # labels
+  labelParams <- set_labels_params(nrow(hcdata$labels), direction, fan)
+  hcdata$labels$angle <- labelParams$angle
+  
+  p <- p +
+    geom_text(data        =  label(hcdata),
+              aes(x       =  x,
+                  y       =  y,
+                  label   =  label,
+                  colour  =  factor(clust),
+                  angle   =  angle),
+              vjust       =  labelParams$vjust,
+              hjust       =  labelParams$hjust,
+              nudge_y     =  ymax * nudge.label,
+              size        =  label.size,
+              show.legend =  FALSE)
+  
+  # colors and limits
+  if (!is.null(scale.color)) {
+    p <- p + scale_color_manual(values = scale.color)
+  }
+  
+  ylim <- -round(ymax * expand.y, 1)
+  p    <- p + expand_limits(y = ylim)
+  
+  p
+}
+
+
+
 #Cluster LIMANDE
 z <- which(grepl(paste0("LIMALIM_G0"),names(data.maf)))
 res.all <- maf.f(data.maf[,c(z)],as.matrix(data.maf[,c(1,2)]),hmin=0,hmax=0.05)
@@ -1088,6 +1235,17 @@ clust <-cascadeKM(toto[,c(1:2)],2,6,iter=999, criterion = "ssi")
 plot(clust)
 part.dab <- clust$partition
 
+
+dendro_cut <- dendro_data_k(arbre, 5)
+
+dab_dendro <- plot_ggdendro(dendro_cut,
+                            direction   = "lr",
+                            expand.y    = 0.2, 
+                            scale.color=viridis(6))+theme_minimal()+ggtitle("Dab")
+
+
+
+
 toto <- data.maf[,c(1,2,z)]
 colnames(toto)[3:15] <- c(substr(colnames(toto)[3:15],12,15))
 toto <- toto %>% pivot_longer(3:15,names_to="Annee",values_to="Densite")
@@ -1104,7 +1262,7 @@ dab.group <-ggplot()+
   geom_point(data=toto[toto$Mean ==0,], aes(x=loncor,y=latcor, size=abs(Mean)), pch=4)+
   scale_fill_viridis()+ 
   geom_path(data = cotes, aes(x = long, y = lat, group = group))+
-  facet_wrap(~Group) + theme_minimal() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)")+ coord_fixed()
+  facet_wrap(~Group) + theme_minimal() + xlab("Longitude(°)") + ylab("Latitude(°)")+ coord_fixed()
 
 
 
@@ -1160,7 +1318,7 @@ dab.group <-ggplot()+
 #   geom_point(data=toto[toto$Mean ==0,], aes(x=loncor,y=latcor, size=abs(Mean)), pch=4)+
 #   scale_fill_viridis()+ 
 #   geom_path(data = cotes, aes(x = long, y = lat, group = group))+
-#   facet_wrap(~Group, ncol=2) + theme_minimal() + xlab("Longitude(?)") + ylab("Latitude(?)")+ coord_fixed()
+#   facet_wrap(~Group, ncol=2) + theme_minimal() + xlab("Longitude(°)") + ylab("Latitude(°)")+ coord_fixed()
 
 
 #Cluster PLAICE
@@ -1201,6 +1359,16 @@ clust <-cascadeKM(toto[,c(1:2)],2,6,iter=100, criterion = "ssi")
 plot(clust)
 part.plaice <- clust$partition
 
+
+dendro_cut <- dendro_data_k(arbre, 5)
+
+plaice_dendro <- plot_ggdendro(dendro_cut,
+                               direction   = "lr",
+                               expand.y    = 0.2, 
+                               scale.color=viridis(6))+theme_minimal()+ggtitle("Plaice")
+
+
+
 toto <- data.maf[,c(1,2,z)]
 colnames(toto)[3:15] <- c(substr(colnames(toto)[3:15],12,15))
 toto <- toto %>% pivot_longer(3:15,names_to="Annee",values_to="Densite")
@@ -1217,7 +1385,7 @@ plaice.group <-ggplot()+
   geom_point(data=toto[toto$Mean ==0,], aes(x=loncor,y=latcor, size=abs(Mean)), pch=4)+
   scale_fill_viridis()+ 
   geom_path(data = cotes, aes(x = long, y = lat, group = group))+
-  facet_wrap(~Group) + theme_minimal() + xlab("Longitude(dec.)") + ylab("Latitude(dec.)")+ coord_fixed()
+  facet_wrap(~Group) + theme_minimal() + xlab("Longitude(°)") + ylab("Latitude(°)")+ coord_fixed()
 
 
 
@@ -1262,6 +1430,17 @@ clust <-cascadeKM(toto[,c(1:2)],2,6,iter=999, criterion = "ssi")
 plot(clust)
 part.sole <-clust$partition
 
+
+dendro_cut <- dendro_data_k(arbre, 5)
+
+sole_dendro <- plot_ggdendro(dendro_cut,
+                             direction   = "lr",
+                             expand.y    = 0.2, 
+                             scale.color=viridis(6))+theme_minimal()+ggtitle("Sole")
+
+
+
+
 toto <- data.maf[,c(1,2,z)]
 colnames(toto)[3:15] <- c(substr(colnames(toto)[3:15],12,15))
 toto <- toto %>% pivot_longer(3:15,names_to="Annee",values_to="Densite")
@@ -1278,7 +1457,7 @@ sole.group <-ggplot()+
   geom_point(data=toto[toto$Mean ==0,], aes(x=loncor,y=latcor, size=abs(Mean)), pch=4)+
   scale_fill_viridis()+ 
   geom_path(data = cotes, aes(x = long, y = lat, group = group))+
-  facet_wrap(~Group, ncol=3) + theme_minimal() + xlab("Longitude(dec.)") + ylab("Latitude(dec.)") + coord_fixed()
+  facet_wrap(~Group, ncol=3) + theme_minimal() + xlab("Longitude(°)") + ylab("Latitude(°)") + coord_fixed()
 
 
 
@@ -1288,6 +1467,9 @@ sole.group <-ggplot()+
 #Combined plot#####
 cowplot::plot_grid(dab.dend,plaice.dend,sole.dend, nrow=2,ncol=2)
 cowplot::plot_grid(dab.group,plaice.group,sole.group, nrow=3,ncol=1)
+cowplot::plot_grid(dab_dendro,plaice_dendro,sole_dendro, nrow=3,ncol=1)
+#ggsave("Figure_5.pdf", path="Results/Figures")
+#ggsave("Figure_5.tiff", path="Results/Figures")
 
 dab.com.maf <- data.frame(name=rownames(part.dab),community=part.dab[,4])
 plaice.com.maf <- data.frame(name=rownames(part.plaice),community=part.plaice[,4])
@@ -1305,8 +1487,6 @@ gg <- ggplot(com.maf,
   geom_stratum()
 gg + geom_flow(stat = "alluvium", color = "black") +
   geom_text(aes(label = name), stat = "alluvium") + scale_fill_viridis_d()+ theme_bw()
-
-ggsave("Figure_5.pdf",path="Results/Figures")
 #####
 
 #Clustering comparing#####
@@ -1344,6 +1524,7 @@ library(tidyr)
 library(ggmap)
 library(viridis)
 
+##V1####
 world <- ne_countries(scale = "medium", returnclass = "sf")
 class(world)
 
@@ -1383,20 +1564,111 @@ centroids$id <- as.character(unique(stratepoly.df$Ifremer_id))
 rivers <- data.frame(long=c(-0.25,0.3),lat=c(49.2,49.4),legend=c("Orne","Seine"))
 city <- data.frame(long=c(-0.32,0.12,0.2),lat=c(49.28,49.52,49.68),legend=c("Ouistreham","Le Havre","Antifer"))
 
-ggm2 <- ggplot()+geom_point(data=pt, aes(x=loncor,y=latcor),alpha=0.7,col="grey30")+
+coast <- rgdal::readOGR("Data/Coast_estuary_detailled.gpkg")
+coast <- raster::crop(coast, raster::extent(-0.4,0.4,49.15,49.8))
+
+ggm2 <- ggplot()+geom_point(data=pt, aes(x=loncor,y=latcor),alpha=0.7,col="black",size=2.4)+
+  geom_polygon(data = coast, aes(x = long, y = lat, group = group),fill="grey", col="black")+
   geom_polygon(data=stratepoly.df, aes(x=long,y=lat,group=group),col="black",fill=NA)+
   #geom_text(data=centroids,aes(x=long,y=lat,label=id, fontface=2))+
   geom_text(data=rivers,aes(x=long,y=lat,label=legend, fontface=2))+
   geom_text(data=city,aes(x=long,y=lat,label=legend, fontface=3))+
-  geom_path(data = cotes, aes(x = long, y = lat, group = group))+
   theme_minimal() + xlab("Longitude") + ylab("Latitude") +
   ggtitle("" ) + coord_fixed()+
-  theme(legend.position="bottom") 
-
+  theme(legend.position="bottom") +
+  ggsn::scalebar(dist=10, transform=T, dist_unit ="km",location="bottomright",
+                 x.min=(-0.4), x.max=0.35, y.min=49.2, y.max=49.8, st.size=3)
+ggm2
 
 
 gg_inset_map <- ggdraw() +
   draw_plot(ggm2) +
-  draw_plot(ggm1, x = 0,y = 0.6, width = 0.30, height = 0.35)
+  draw_plot(ggm1, x = 0.05,y = 0.6, width = 0.30, height = 0.35)
 
 gg_inset_map
+#ggsave("Figure_0.pdf", path="Results/Figures")
+#ggsave("Figure_0.tiff", path="Results/Figures")
+
+####
+
+##V2####
+
+world <- ne_countries(scale = "large", returnclass = "sf")
+#Element to add
+rivers <- data.frame(long=c(-0.25,0.3),lat=c(49.2,49.4),legend=c("Orne","Seine"))
+city <- data.frame(long=c(-0.32,0.12,0.2),lat=c(49.28,49.52,49.68),legend=c("Ouistreham","Le Havre","Antifer"))
+pt <- Pichon_dens_corres %>% dplyr::select(loncor,latcor) %>% unique()
+
+#Bathymetry
+bathy <- rgdal::readOGR("C:/Users/thibcari/Desktop/Brouillon/Angie/Angie costatis/bathy.gpkg")
+bathy25 <- bathy[bathy@data$DEPTH==c(-25),]
+bathy25 <- fortify(bathy25)
+bathy50 <- bathy[bathy@data$DEPTH==c(-50),]
+bathy50 <- fortify(bathy50)
+bathy100 <- bathy[bathy@data$DEPTH==c(-100),]
+bathy100 <- fortify(bathy100)
+
+bathy25 <- cbind(bathy25,Depth=25)
+bathy50 <- cbind(bathy50,Depth=50)
+bathy100 <- cbind(bathy100,Depth=100)
+bathy2 <- rbind(bathy25,bathy50,bathy100)
+bathy2$Depth <- factor(bathy2$Depth)
+
+#Plot Channel
+EastChan <- ggplot() + 
+  geom_path(data = cotes, aes(x = long, y = lat, group = group))+
+  #geom_polygon(data=stratepoly.df, aes(x=long,y=lat,group=group),col="black",fill=NA)+
+  coord_sf(xlim = c(-0.4, 0.5), ylim = c(49.15, 49.7), expand = FALSE)+
+  geom_text(data=rivers,aes(x=long,y=lat,label=legend, fontface=2))+
+  geom_text(data=city,aes(x=long,y=lat,label=legend, fontface=3))+
+  geom_point(data=pt,aes(x=loncor,y=latcor))+
+  geom_path(data=bathy25,aes(x=long,y=lat, group=group),alpha=0.3)+
+  theme_classic() +xlab("Longitude") +ylab("Latitude")
+
+#Plot France or Europe  
+library(sf)
+box <- bc_bbox <- make_bbox(lat = latcor, lon = loncor, data = pt)
+pt <- st_as_sf(box, coords = c("Coord_x", "Coord_y"), crs= 4326, agr="constant")
+bbox <- st_as_sfc(st_bbox(pt))
+
+FR <- ggplot() + 
+  geom_sf(data = world, fill = "white") + 
+  geom_sf(data = bbox, fill = NA, color = "red", size = 1.2)+
+  coord_sf(xlim = c(-5, 5), ylim = c(42, 52), expand = FALSE)+
+  theme_void()
+
+WestEU <- ggplot() + 
+  geom_sf(data = world, fill = "white") + 
+  geom_sf(data = bbox, fill = NA, color = "red", size = 1.2)+
+  coord_sf(xlim = c(-10, 10), ylim = c(37, 57), expand = FALSE)+
+  theme_void()
+
+
+
+#Combine plot
+library(cowplot)
+ggdraw() +
+  draw_plot(EastChan) +
+  draw_plot(FR, x = 0.70,y = 0.17, width = 0.30, height = 0.30)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
