@@ -1506,8 +1506,8 @@ gg
 
 # MnM figs #####
 
-load("N:/03_RECHERCHES_ETUDES/17_20_NOURSEINE/These/RProjet/Atlas/cotesseine.RData")
-load("N:/03_RECHERCHES_ETUDES/17_20_NOURSEINE/These/RProjet/Atlas/stratepoly.RData")
+load("Data/cotesseine.RData")
+load("Data/stratepoly.RData")
 
 
 library(sf)
@@ -1546,7 +1546,7 @@ ggm1
 
 
 
-poly<- rgdal::readOGR("N:/03_RECHERCHES_ETUDES/17_20_NOURSEINE/These/RProjet/Atlas/secteur_poly.shp")
+poly<- rgdal::readOGR("Data/secteur_poly.shp")
 poly <- spTransform(poly, CRS("+proj=longlat +datum=WGS84"))
 
 pt <- Pichon_dens_corres %>% dplyr::select(loncor,latcor) %>% unique()
@@ -1573,8 +1573,8 @@ ggm2 <- ggplot()+geom_point(data=pt, aes(x=loncor,y=latcor),alpha=0.7,col="black
   #geom_text(data=centroids,aes(x=long,y=lat,label=id, fontface=2))+
   geom_text(data=rivers,aes(x=long,y=lat,label=legend, fontface=2))+
   geom_text(data=city,aes(x=long,y=lat,label=legend, fontface=3))+
-  theme_minimal() + xlab("Longitude") + ylab("Latitude") +
-  ggtitle("" ) + coord_fixed()+
+  theme_minimal() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") +
+  ggtitle("") + coord_fixed()+
   theme(legend.position="bottom") +
   ggsn::scalebar(dist=10, transform=T, dist_unit ="km",location="bottomright",
                  x.min=(-0.4), x.max=0.35, y.min=49.2, y.max=49.8, st.size=3)
