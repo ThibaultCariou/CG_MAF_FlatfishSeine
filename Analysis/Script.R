@@ -1539,7 +1539,8 @@ ggm1 <- ggplot() +
   geom_sf(data = world, fill = "grey") + 
   geom_sf(data = seine_bbox, fill = NA, color = "red", size = 1.2)+
   coord_sf(xlim = c(-5, 5), ylim = c(42, 52), expand = FALSE)+
-  theme_void()
+  theme_void() + xlab("Longitude") +ylab("Latitude")
+
 
 ggm1
 
@@ -1580,15 +1581,13 @@ ggm2 <- ggplot()+geom_point(data=pt, aes(x=loncor,y=latcor),alpha=0.7,col="black
                  x.min=(-0.4), x.max=0.35, y.min=49.2, y.max=49.8, st.size=3)
 ggm2
 
-
 gg_inset_map <- ggdraw() +
   draw_plot(ggm2) +
-  draw_plot(ggm1, x = 0.05,y = 0.6, width = 0.30, height = 0.35)
+  draw_plot(ggm1, x = 0.06 ,y = 0.585, width = 0.30, height = 0.35)
 
 gg_inset_map
 #ggsave("Figure_0.pdf", path="Results/Figures")
 #ggsave("Figure_0.tiff", path="Results/Figures")
-
 ####
 
 ##V2####
