@@ -1,5 +1,5 @@
 
-
+#Data loading
 load("Data/TabFin_estuseine95-19.RData")
 load("Data/cotesseine.RData")
 load("Data/polygone.RData")
@@ -29,7 +29,7 @@ library(igraph) #networks
 library(ggraph)
 library(tidyr)
 library(tidygraph)
-
+library(ggdendro)
 
 #Data formating##### 
 Pichon <- toutvcp %>% 
@@ -125,7 +125,7 @@ codif <- ttsel %>% dplyr::select(Numéro_du_Trait, Code_Station, annee, lonmoy, 
 allstrat <- ttsel %>% expand(Code_Station, Nv_Rubbin)
 pipo <- left_join(allstrat, codif) %>% left_join(ttsel) %>% mutate(Densite = ifelse(is.na(Densite), 0, Densite))
 Pichon_dens_corres <- left_join(codif, pipo)
-
+#####
 
 #Table basic stats#####
 tab <- Pichon_dens_corres %>% dplyr::select(Code_Station, annee, Nv_Rubbin,Groupe,Densite)
@@ -140,6 +140,18 @@ tab1
 
 
 #Figure of mean distribution#####
+
+bathy <- raster::raster("Data/Area of interest.asc") #Data dowloaded on EMODnet bathymetry portal
+bathy <- raster::crop(bathy, raster::extent(-0.3,0.3,49.25,49.7))
+bathy_line <- raster::rasterToContour(bathy, levels=c(5,10,20))
+bathy_line <- fortify(bathy_line)
+bathy_line$Depth <- 0
+bathy_line$Depth[bathy_line$id=="C_1"] <- 5
+bathy_line$Depth[bathy_line$id=="C_2"] <- 10
+bathy_line$Depth[bathy_line$id=="C_3"] <- 20
+#bathy_line$Depth[bathy_line$id=="C_4"] <- 30
+bathy_line$Depth <- factor(bathy_line$Depth)
+
 toto <- Pichon_dens_corres 
 toto <- toto %>% group_by(loncor,latcor,Nv_Rubbin,Groupe) %>% summarise(Mean=mean(Densite))
 toto <- toto %>% filter(Groupe=="G0") %>% ungroup()
@@ -157,13 +169,16 @@ toto$Common[toto$Nv_Rubbin=="SOLEVUL"] <- "Sole"
 toto <- toto %>% filter(Common!="Flounder") %>% ungroup()
 
 mean_distri <- ggplot()+
-  geom_point(data=toto[toto$Mean!=0,],aes(x = loncor, y = latcor, col=Mean, size=Mean), alpha=0.7) +  
-  geom_point(data=toto[toto$Mean==0,],aes(x = loncor, y = latcor), size=3, pch=4) +  
-  theme_bw() + scale_color_viridis()  + 
-  ggtitle("") + xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
+  geom_path(data=bathy_line, aes(x = long, y = lat, group = group, lty=Depth))+
+  geom_point(data=toto[toto$Mean!=0,],aes(x = loncor, y = latcor, size=Mean), alpha=0.7) +  
+  geom_point(data=toto[toto$Mean==0,],aes(x = loncor, y = latcor, pch=4, size=Mean)) +  
+  theme_bw() +
+  ggtitle("") + xlab("Longitude (DD)")+ylab("Latitude (DD)") +
   facet_wrap(~Common)+
   geom_polygon(data = coast, aes(x = long, y = lat, group = group),fill="grey",col="black") + coord_fixed() +
-  labs(size = "Mean density\n(ind. per hectare)",col = "Mean density\n(ind. per hectare)")
+  labs(size = "Mean density\n(ind. per hectare)",col = "Mean density\n(ind. per hectare)")+
+  scale_shape_identity()+
+  guides(size = guide_legend(override.aes = list(pch = c(4, 19, 19, 19, 19) ) ) )
 mean_distri
 
 #ggsave("Figure_1.pdf",path="Results/Figures")
@@ -310,7 +325,7 @@ names(CG_dfG0)[17] <- "Sci.red"
 names(CG_dfG0)[18] <- "Species"
 coastCG <- raster::crop(coast, raster::extent(-0.15,0.3,49.2,49.60))
 
-#↑1st version, with mean isotropy
+#1st version, with mean isotropy
 Grav <- ggplot(data=CG_dfG0,aes(x=Lon, y=Lat)) + 
   geom_point(aes(col=Species),alpha=0.7, pch=19, size=2) +
   geom_segment(data=Mean_iso[Mean_iso$Classe=="G0",],aes(x=x,xend=xend,y=y, yend=yend, col=Species), lwd=1.3)+ 
@@ -360,13 +375,25 @@ radius <- data.frame(Lon=CG_dfG0$Lon,Lat=CG_dfG0$Lat,
                      Species=CG_dfG0$Species,Annee=CG_dfG0$Annee)
 
 
+bathy <- raster::raster("Data/Area of interest.asc") #Data dowloaded on EMODnet bathymetry portal
+bathy <- raster::crop(bathy, raster::extent(-0.4,0.4,49.15,49.8))
+bathy_line <- raster::rasterToContour(bathy, levels=c(5,10,20))
+bathy_line <- fortify(bathy_line)
+bathy_line$Depth <- 0
+bathy_line$Depth[bathy_line$id=="C_1"] <- 5
+bathy_line$Depth[bathy_line$id=="C_2"] <- 10
+bathy_line$Depth[bathy_line$id=="C_3"] <- 20
+#bathy_line$Depth[bathy_line$id=="C_4"] <- 30
+bathy_line$Depth <- factor(bathy_line$Depth)
+
 plo1 <-ggplot(data=CG_dfG0) + 
   geom_point(aes(x=Lon,y=Lat,col=Species),alpha=0.8, pch=19, size=2)+
+  geom_path(data=bathy_line, aes(x = long, y = lat, group = group, lty=Depth))+
   #geom_segment(aes(x=x1,xend=x2,y=y1, yend=y2, col=Species), lwd=1.3)+ 
   #geom_segment(aes(x=x3,xend=x4,y=y3, yend=y4, col=Species), lwd=1.3)+ 
   geom_ellipse(data=radius,aes(x0=Lon,y0=Lat,a=a/6,b=b/6,angle=angle,col=Species,fill=Species))+
   geom_polygon(data = coastCG, aes(x = long, y = lat, group = group),fill="grey",col="black")+
-  theme_bw() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") + ggtitle("") +
+  theme_bw() + xlab("Longitude (DD)") + ylab("Latitude (DD)") + ggtitle("") +
   xlim(-0.15,0.3) + ylim(49.25,49.6) +
   scale_colour_viridis_d() + guides(col=F,fill=F) +scale_fill_viridis_d(alpha=0.3)+coord_fixed()
 
@@ -375,6 +402,12 @@ cowplot::plot_grid(plo1,plo2, nrow=1)
 
 #ggsave("Figure_2.pdf",path="Results/Figures")
 #ggsave("Figure_2.tiff",path="Results/Figures")
+
+#Relationship between isotropy and inertia for the plaice
+tata <- CG_dfG0[CG_dfG0$Species=="Plaice",]
+shapiro.test(tata$Iso)
+shapiro.test(tata$Iner) #Normality checked 
+cor.test(tata$Iner,tata$Iso, method="pearson")
 #####
 
 #Global index of collocation and local index of collocation#####
@@ -966,9 +999,9 @@ toto$Color <- ifelse(toto$Value>0,1,2)
 dab.maf <-ggplot(toto)+
   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
   theme_bw()+ 
-  xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
+  xlab("Longitude (DD)")+ylab("Latitude (DD)") +
   geom_polygon(data = coastMAF, aes(x = long, y = lat, group = group),fill="grey",col="black")+
-  facet_wrap(.~MAF) +ggtitle("Dab") + guides(col=F) + coord_fixed() + labs(size="absolute\nMAF value") +
+  facet_wrap(.~MAF) +ggtitle("Dab") + guides(col=F) + coord_fixed() + labs(size="MAF value") +
   scale_color_viridis(option="D")
 
 
@@ -977,9 +1010,9 @@ toto$Color <- ifelse(toto$Value>0,1,2)
 plaice.maf <- ggplot(toto)+
   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
   theme_bw() + 
-  xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
+  xlab("Longitude (DD)")+ylab("Latitude (DD)") +
   geom_polygon(data = coastMAF, aes(x = long, y = lat, group = group),fill="grey",col="black")+
-  facet_wrap(.~MAF) +ggtitle("Plaice") + guides(col=F)+ coord_fixed() + labs(size="absolute\nMAF value") +
+  facet_wrap(.~MAF) +ggtitle("Plaice") + guides(col=F)+ coord_fixed() + labs(size="MAF value") +
   scale_color_viridis(option="D")
 
 toto <- maf.df.sole %>% filter(MAF %in% c("MAF1","MAF2","MAF3"))
@@ -987,9 +1020,9 @@ toto$Color <- ifelse(toto$Value>0,1,2)
 sole.maf <-ggplot(toto)+
   geom_point(aes(x = Lon, y = Lat, col=Color, size=abs(Value)), pch=19, alpha=0.5) +  
   theme_bw() + 
-  xlab("Longitude (dec.)")+ylab("Latitude (dec.)") +
+  xlab("Longitude (DD)")+ylab("Latitude (DD)") +
   geom_polygon(data = coastMAF, aes(x = long, y = lat, group = group),fill="grey",col="black")+
-  facet_wrap(.~MAF) +ggtitle("Sole") + guides(col=F)+ coord_fixed() + labs(size="absolute\nMAF value") +
+  facet_wrap(.~MAF) +ggtitle("Sole") + guides(col=F)+ coord_fixed() + labs(size="MAF value") +
   scale_color_viridis(option="D")
 
 # toto <- maf.df.flounder %>% filter(MAF %in% c("MAF1","MAF2","MAF3"))
@@ -1021,16 +1054,24 @@ vario.db <- cbind(as.matrix(data.maf[,c(1,2)]),vario.db)
 
 vario.db <-db.create(vario.db)
 vario.db <-db.locate(vario.db,c("loncor","latcor"),"x")
-vario.db <-db.locate(vario.db,c(4),"z")
-varMAF1 <- RGeostats::vario.calc(vario.db)
-plot(varMAF1)
+vario.db <-db.locate(vario.db,c(4:16),"z")
+varMAF <- RGeostats::vario.calc(vario.db)
+#RGeostats::plot(varMAF)
 
-vario.df <- data.frame(
-  Distance=c(varMAF1@vardirs[[1]]$hh),
-  Variance=c(varMAF1@vardirs[[1]]$gg),
-  Size=c(varMAF1@vardirs[[1]]$sw),
-  Species=rep("Dab",length(varMAF1@vardirs[[1]]$gg))
-)
+MAF <- numeric()
+Distance <- numeric()
+Variance <- numeric()
+Pairs <- numeric() 
+Species <- character()
+for (i in 1:13){
+  varioMAFi <- vario.extract(varMAF, i)
+  MAF <- c(MAF,rep(i,length(varioMAFi$dist)))
+  Distance <- c(Distance,varioMAFi$dist)
+  Variance <- c(Variance,varioMAFi$vario)
+  Pairs <- c(Pairs,varioMAFi$sw)
+  Species <- c(Species,rep("Dab",length(varioMAFi$dist)))
+}
+  
 
 z <- which(grepl(paste0("PLEUPLA_G0"),names(data.maf)))
 res.all <- maf.f(data.maf[,c(z)],as.matrix(data.maf[,c(1,2)]),hmin=0,hmax=0.05)
@@ -1041,17 +1082,19 @@ vario.db <- cbind(as.matrix(data.maf[,c(1,2)]),vario.db)
 
 vario.db <-db.create(vario.db)
 vario.db <-db.locate(vario.db,c("loncor","latcor"),"x")
-vario.db <-db.locate(vario.db,c(4),"z")
-varMAF1 <- RGeostats::vario.calc(vario.db)
-plot(varMAF1)
+vario.db <-db.locate(vario.db,c(4:16),"z")
+varMAF <- RGeostats::vario.calc(vario.db)
 
-tmp <- data.frame(
-  Distance=c(varMAF1@vardirs[[1]]$hh),
-  Variance=c(varMAF1@vardirs[[1]]$gg),
-  Size=c(varMAF1@vardirs[[1]]$sw),
-  Species=rep("Plaice",length(varMAF1@vardirs[[1]]$gg))
-)
-vario.df <- rbind(vario.df,tmp)
+
+for (i in 1:13){
+  varioMAFi <- vario.extract(varMAF, i)
+  MAF <- c(MAF,rep(i,length(varioMAFi$dist)))
+  Distance <- c(Distance,varioMAFi$dist)
+  Variance <- c(Variance,varioMAFi$vario)
+  Pairs <- c(Pairs,varioMAFi$sw)
+  Species <- c(Species,rep("Plaice",length(varioMAFi$dist)))
+}
+
 
 z <- which(grepl(paste0("SOLEVUL_G0"),names(data.maf)))
 res.all <- maf.f(data.maf[,c(z)],as.matrix(data.maf[,c(1,2)]),hmin=0,hmax=0.05)
@@ -1062,23 +1105,38 @@ vario.db <- cbind(as.matrix(data.maf[,c(1,2)]),vario.db)
 
 vario.db <-db.create(vario.db)
 vario.db <-db.locate(vario.db,c("loncor","latcor"),"x")
-vario.db <-db.locate(vario.db,c(4),"z")
-varMAF1 <- RGeostats::vario.calc(vario.db)
-plot(varMAF1)
+vario.db <-db.locate(vario.db,c(4:16),"z")
+varMAF <- RGeostats::vario.calc(vario.db)
 
-tmp <- data.frame(
-  Distance=c(varMAF1@vardirs[[1]]$hh),
-  Variance=c(varMAF1@vardirs[[1]]$gg),
-  Size=c(varMAF1@vardirs[[1]]$sw),
-  Species=rep("Sole",length(varMAF1@vardirs[[1]]$gg))
-)
-vario.df <- rbind(vario.df,tmp)
+for (i in 1:13){
+  varioMAFi <- vario.extract(varMAF, i)
+  MAF <- c(MAF,rep(i,length(varioMAFi$dist)))
+  Distance <- c(Distance,varioMAFi$dist)
+  Variance <- c(Variance,varioMAFi$vario)
+  Pairs <- c(Pairs,varioMAFi$sw)
+  Species <- c(Species,rep("Sole",length(varioMAFi$dist)))
+}
+
+vario.df <- data.frame(
+  MAF=MAF,
+  Distance=Distance,
+  Variance=Variance,
+  Pairs=Pairs,
+  Species=Species)
+
+
 
 
 maf_vario <- ggplot(vario.df)+
   geom_point(aes(x=Distance,y=Variance,size=Size,col=Species))+
   geom_line(aes(x=Distance,y=Variance,col=Species))+
   scale_color_viridis_d()+theme_bw()
+
+maf_vario <- ggplot(vario.df)+
+  geom_point(aes(x=Distance,y=Variance,col=Species, size=Pairs))+
+  geom_line(aes(x=Distance,y=Variance,col=Species))+
+  scale_color_viridis_d()+theme_bw()+facet_wrap(.~MAF)+ 
+  scale_size_continuous(range = c(1, 3))
 
 maf_vario
 #ggsave("Figure_4.pdf", path="Results/Figures")
@@ -1241,7 +1299,7 @@ dendro_cut <- dendro_data_k(arbre, 5)
 dab_dendro <- plot_ggdendro(dendro_cut,
                             direction   = "lr",
                             expand.y    = 0.2, 
-                            scale.color=viridis(6))+theme_minimal()+ggtitle("Dab")
+                            scale.color=viridis(6))+theme_minimal()+ggtitle("Dab")+xlab("")+ylab("")
 
 
 
@@ -1365,7 +1423,7 @@ dendro_cut <- dendro_data_k(arbre, 5)
 plaice_dendro <- plot_ggdendro(dendro_cut,
                                direction   = "lr",
                                expand.y    = 0.2, 
-                               scale.color=viridis(6))+theme_minimal()+ggtitle("Plaice")
+                               scale.color=viridis(6))+theme_minimal()+ggtitle("Plaice")+xlab("")+ylab("")
 
 
 
@@ -1436,7 +1494,7 @@ dendro_cut <- dendro_data_k(arbre, 5)
 sole_dendro <- plot_ggdendro(dendro_cut,
                              direction   = "lr",
                              expand.y    = 0.2, 
-                             scale.color=viridis(6))+theme_minimal()+ggtitle("Sole")
+                             scale.color=viridis(6))+theme_minimal()+ggtitle("Sole")+xlab("")+ylab("Distance")
 
 
 
@@ -1517,6 +1575,7 @@ library(spData)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(rnaturalearthhires)
+library(raster)
 
 library(sp)
 library(dplyr)
@@ -1562,19 +1621,35 @@ colnames(centroids) <- c("long","lat")
 centroids <- as.data.frame(centroids)
 centroids$id <- as.character(unique(stratepoly.df$Ifremer_id))
 
-rivers <- data.frame(long=c(-0.25,0.3),lat=c(49.2,49.4),legend=c("Orne","Seine"))
-city <- data.frame(long=c(-0.32,0.12,0.2),lat=c(49.28,49.52,49.68),legend=c("Ouistreham","Le Havre","Antifer"))
+rivers <- data.frame(long=c(-0.25,0.3),lat=c(49.2,49.5),legend=c("Orne","Seine"))
+city <- data.frame(long=c(-0.32,0.12,0.2,0.3),lat=c(49.28,49.52,49.68,49.35),legend=c("Ouistreham","Le Havre","Antifer","Pont de\n Normandie"))
+
+#Bathymetry
+bathy <- raster::raster("Data/Area of interest.asc") #Data dowloaded on EMODnet bathymetry portal
+bathy <- raster::crop(bathy, raster::extent(-0.4,0.4,49.15,49.8))
+bathy_line <- raster::rasterToContour(bathy, levels=c(5,10,20))
+bathy_line <- fortify(bathy_line)
+bathy_line$Depth <- 0
+bathy_line$Depth[bathy_line$id=="C_1"] <- 5
+bathy_line$Depth[bathy_line$id=="C_2"] <- 10
+bathy_line$Depth[bathy_line$id=="C_3"] <- 20
+#bathy_line$Depth[bathy_line$id=="C_4"] <- 30
+bathy_line$Depth <- factor(bathy_line$Depth)
+
+  
 
 coast <- rgdal::readOGR("Data/Coast_estuary_detailled.gpkg")
 coast <- raster::crop(coast, raster::extent(-0.4,0.4,49.15,49.8))
 
 ggm2 <- ggplot()+geom_point(data=pt, aes(x=loncor,y=latcor),alpha=0.7,col="black",size=2.4)+
   geom_polygon(data = coast, aes(x = long, y = lat, group = group),fill="grey", col="black")+
+  geom_path(data=bathy_line, aes(x = long, y = lat, group = group, lty=Depth))+
   geom_polygon(data=stratepoly.df, aes(x=long,y=lat,group=group),col="black",fill=NA)+
   #geom_text(data=centroids,aes(x=long,y=lat,label=id, fontface=2))+
   geom_text(data=rivers,aes(x=long,y=lat,label=legend, fontface=2))+
   geom_text(data=city,aes(x=long,y=lat,label=legend, fontface=3))+
-  theme_minimal() + xlab("Longitude (dec.)") + ylab("Latitude (dec.)") +
+  geom_segment(aes(x=0.271332248,y=49.414831594,xend=0.271332248,yend=49.454831594),col="black",lwd=2)+
+  theme_minimal() + xlab("Longitude (DD)") + ylab("Latitude (DD)") +
   ggtitle("") + coord_fixed()+
   theme(legend.position="bottom") +
   ggsn::scalebar(dist=10, transform=T, dist_unit ="km",location="bottomright",
@@ -1583,7 +1658,7 @@ ggm2
 
 gg_inset_map <- ggdraw() +
   draw_plot(ggm2) +
-  draw_plot(ggm1, x = 0.06 ,y = 0.585, width = 0.30, height = 0.35)
+  draw_plot(ggm1, x = 0.09 ,y = 0.585, width = 0.30, height = 0.35)
 
 gg_inset_map
 #ggsave("Figure_0.pdf", path="Results/Figures")
@@ -1595,21 +1670,23 @@ gg_inset_map
 world <- ne_countries(scale = "large", returnclass = "sf")
 #Element to add
 rivers <- data.frame(long=c(-0.25,0.3),lat=c(49.2,49.4),legend=c("Orne","Seine"))
-city <- data.frame(long=c(-0.32,0.12,0.2),lat=c(49.28,49.52,49.68),legend=c("Ouistreham","Le Havre","Antifer"))
+city <- data.frame(long=c(-0.32,0.12,0.2,0.271332248),lat=c(49.28,49.52,49.68,49.434831594),legend=c("Ouistreham","Le Havre","Antifer","Pont de\n Normandie"))
 pt <- Pichon_dens_corres %>% dplyr::select(loncor,latcor) %>% unique()
 
 #Bathymetry
-bathy <- rgdal::readOGR("C:/Users/thibcari/Desktop/Brouillon/Angie/Angie costatis/bathy.gpkg")
-bathy25 <- bathy[bathy@data$DEPTH==c(-25),]
+bathy <- raster::raster("Data/Area of interest.asc")
+bathy_line <- raster::rasterToContour(bathy, levels=c(5,10,20,30))
+
+bathy5 <- bathy[bathy@data$DEPTH==c(-5),]
 bathy25 <- fortify(bathy25)
-bathy50 <- bathy[bathy@data$DEPTH==c(-50),]
+bathy50 <- bathy[bathy@data$DEPTH==c(-10),]
 bathy50 <- fortify(bathy50)
-bathy100 <- bathy[bathy@data$DEPTH==c(-100),]
+bathy100 <- bathy[bathy@data$DEPTH==c(-20),]
 bathy100 <- fortify(bathy100)
 
-bathy25 <- cbind(bathy25,Depth=25)
-bathy50 <- cbind(bathy50,Depth=50)
-bathy100 <- cbind(bathy100,Depth=100)
+bathy25 <- cbind(bathy25,Depth=5)
+bathy50 <- cbind(bathy50,Depth=10)
+bathy100 <- cbind(bathy100,Depth=20)
 bathy2 <- rbind(bathy25,bathy50,bathy100)
 bathy2$Depth <- factor(bathy2$Depth)
 
@@ -1649,25 +1726,39 @@ library(cowplot)
 ggdraw() +
   draw_plot(EastChan) +
   draw_plot(FR, x = 0.70,y = 0.17, width = 0.30, height = 0.30)
+#####
 
+#Annexes#####
 
+#Annual density
+mean <- Pichon_dens_corres %>% dplyr::group_by(annee,Groupe,Nv_Rubbin)%>%
+  summarise(Mean=mean(Densite))
+mean <- mean %>% filter(Groupe=="G0" & Nv_Rubbin!="PLATFLE")
+names(mean) <- c("Year","Group","Rubbin","Density")
+#Adding scientific names
+mean <- mean %>%
+  left_join(noms, by = c("Rubbin" = "Rubbin"))
+names(mean)[6] <- "Sci.red"
+names(mean)[7] <- "Species"
 
+mean$Survey <- 0
+mean$Survey[mean$Year %in% c(1994:2005)] <- 1
+mean$Survey[mean$Year %in% c(2007:2011)] <- 2
+mean$Survey[mean$Year %in% c(2016:2020)] <- 3
 
+ggplot(mean)+
+  geom_line(aes(x=Year,y=Density,color=Species,group=interaction(Species,Survey)))+
+  scale_color_viridis_d()+theme_minimal()
 
+#Years CG
+library(ggrepel)
+names(CG_dfG0)[2] <- "Year"
 
+ggplot(data=CG_dfG0) +
+  geom_polygon(data = coastCG, aes(x = long, y = lat, group = group),fill="grey",col="black")+
+  geom_point(aes(x=Lon,y=Lat),alpha=0.4, pch=19, size=1)+
+  geom_text_repel(aes(x=Lon,y=Lat,label=Year),alpha=0.8, pch=19, size=2)+
+  theme_bw() + xlab("Longitude (DD)") + ylab("Latitude (DD)") + ggtitle("") +
+  xlim(-0.15,0.3) + ylim(49.25,49.6) + facet_wrap(.~Species) + coord_fixed()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#####
