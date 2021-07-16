@@ -233,8 +233,8 @@ y4 <- numeric()
 
 #Loop
 for(sp in tax_plats){
-  tmp <- data.CG %>% select("loncor","latcor","annee", contains(sp)) #Group by hauls
-  tmp <- tmp %>% group_by(loncor,latcor,annee) %>% summarise_all(sum)
+  tmp <- data.CG %>% dplyr::select("loncor","latcor","annee", contains(sp)) #Group by hauls
+  tmp <- tmp %>% dplyr::group_by(loncor,latcor,annee) %>% dplyr::summarise_all(sum)
   df <- tmp
   names(df) <- names(tmp)
   t<-0
@@ -1665,7 +1665,7 @@ gg_inset_map
 #ggsave("Figure_0.tiff", path="Results/Figures")
 ####
 
-##V2####
+##V2 (not used)####
 
 world <- ne_countries(scale = "large", returnclass = "sf")
 #Element to add
@@ -1757,7 +1757,7 @@ names(CG_dfG0)[2] <- "Year"
 ggplot(data=CG_dfG0) +
   geom_polygon(data = coastCG, aes(x = long, y = lat, group = group),fill="grey",col="black")+
   geom_point(aes(x=Lon,y=Lat),alpha=0.4, pch=19, size=1)+
-  geom_text_repel(aes(x=Lon,y=Lat,label=Year),alpha=0.8, pch=19, size=2)+
+  geom_text_repel(aes(x=Lon,y=Lat,label=Year),alpha=0.8, pch=19, size=4, fontface=2)+
   theme_bw() + xlab("Longitude (DD)") + ylab("Latitude (DD)") + ggtitle("") +
   xlim(-0.15,0.3) + ylim(49.25,49.6) + facet_wrap(.~Species) + coord_fixed()
 
